@@ -330,7 +330,21 @@ function Get-HKUKeyForUser($User) {
     try {
         $Key = "$($User.Root)\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\FileExts\$Extension\UserChoice"
         if (!(Test-Path $Key)) {
-            throw "UserChoice subkey does not exist or is unavaliable"
+            $Key_Parent = $Key -replace '\\UserChoice$'
+            $Key_OpenWithList = "$Key_Parent\OpenWithList"
+            $Key_OpenWithProgids = "$Key_Parent\OpenWithProgids"
+            New-Item -Path $Key_Parent | Out-Null
+            New-Item -Path $Key_OpenWithList | Out-Null
+            New-Item -Path $Key_OpenWithProgids | Out-Null
+            New-ItemProperty -Path $Key_OpenWithProgids -Name $ProgID -Type None -Value ([byte[]]::new(0)) | Out-Null
+            New-Item -Path $Key | Out-Null
+            New-ItemProperty -Path $Key -Name Hash -Type String -Value "" | Out-Null
+            New-ItemProperty -Path $Key -Name ProgId -Type String -Value "" | Out-Null
+            if (!(Test-Path $Key)) {
+                throw "UserChoice subkey does not exist or is unavaliable"
+            } else {
+                return $Key
+            }
         } else {
             return $Key
         }
@@ -522,9 +536,7 @@ function Remove-Registry-ACL-Deny-Rules($User) {
 
             $MD5 = Get-ArrayMD5Hash $A
             $PatentHash = Get-PatentHash $A $MD5
-
             $Hash = [System.Convert]::ToBase64String([System.BitConverter]::GetBytes([Int64]$PatentHash))
-
             Write-Verbose "Hash for user `"$($User.Name)`": $Hash"
         } catch {
             Write-Warning "Failed to calculate hash for `"$($User.Name)`", skipping this user"
