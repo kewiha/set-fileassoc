@@ -1,8 +1,8 @@
-# Set-FileAssoc.ps1 - a script to change Windows 10 file associations
+# Set-FileAssoc.ps1 - a script to change Windows 10 and 11 file associations
 
 
 ## What?
-This script allows a user or an IT administrator to change user file associations in Windows 10.
+This script allows a user or an IT administrator to change user file associations in Windows 10 and 11.
 
 ## Why?
 User file associations in newer versions of Windows are normally protected from an unauthorized change, and therefore can only be set interactively through Settings app, or using a XML file pushed through GPO.
@@ -43,6 +43,8 @@ Consult your legal department for guidance.
 
 ## Credits
 Christoph Kolbicz for SetUserFTA: https://kolbi.cz
+
+axpokl for: https://github.com/axpokl/Set-UserFTA
 
 ## License
 See UNLICENSE file.

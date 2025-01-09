@@ -440,16 +440,6 @@ function Get-IsProgIDAvaliable($User) {
            (Test-Path "HKLM:\Software\Classes\$ProgID" -ErrorAction SilentlyContinue)
 }
 
-function Clear-UserChoice($User) {
-    if (!$User.Key) {
-        throw "No registry key provided for Clear-UserChoice"
-    }
-
-    if ($PSCmdlet.ShouldProcess($User.Key, "Clear-ItemProperty")) {
-        Clear-ItemProperty -Path $User.Key -Name "Hash"
-    }
-}
-
 function Set-UserChoice($User, $Hash) {
     if (!$Hash) {
         throw "No hash provided for Set-UserChoice"
@@ -482,6 +472,22 @@ function Get-PatentHash([byte[]]$A, [byte[]]$MD5) {
     return $Ret
 }
 
+function Remove-Registry-ACL-Deny-Rules($User) {
+    $SubKey = $User.Key -replace '^.+?(?i)SOFTWARE', 'SOFTWARE'
+    try {
+        $Reg = [Microsoft.Win32.Registry]::CurrentUser.OpenSubKey($SubKey,[Microsoft.Win32.RegistryKeyPermissionCheck]::ReadWriteSubTree,[System.Security.AccessControl.RegistryRights]::ChangePermissions)
+        $Reg_ACL = $Reg.GetAccessControl()
+        $Reg_ACL_Rules_Deny = $Reg_ACL.Access | ? {$_.AccessControlType -eq 'Deny' -and $_.RegistryRights -eq "SetValue"}
+        $Reg_ACL_Rules_Deny_Meas = $Reg_ACL_Rules_Deny | measure
+        if ($Reg_ACL_Rules_Deny_Meas.Count -gt 0) {
+            Foreach ($Deny_Rule in $Reg_ACL_Rules_Deny) {$Reg_ACL.RemoveAccessRule($Deny_Rule) | Out-Null}
+            $Reg.SetAccessControl($Reg_ACL)
+        }
+    } catch {
+        Write-Warning "Failed to prune deny ACL entries from registry"
+    }
+}
+
 
 
 
@@ -502,12 +508,7 @@ function Get-PatentHash([byte[]]$A, [byte[]]$MD5) {
             continue
         }
 
-        try {
-            Clear-UserChoice $User
-        } catch {
-            Write-Warning "Clear-UserChoice failed, skipping user `"$($User.Name)`""
-            continue
-        }
+        Remove-Registry-ACL-Deny-Rules $User
 
         $User = Set-UserExtraInfo $User
         if (!$User) {
