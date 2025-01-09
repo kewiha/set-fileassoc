@@ -73,6 +73,10 @@
             user
             admin, paul, mike, lina
 
+    .PARAMETER Quiet
+
+        Don't output when association is successfully changed.
+
     .INPUTS
 
         None.
@@ -91,6 +95,10 @@
     .EXAMPLE
 
         C:\> .\Set-FileAssoc.ps1 -Extension .html -ProgID ChromeHTML -Users user1, user2
+
+    .EXAMPLE
+
+        C:\> .\Set-FileAssoc.ps1 -Extension .html -ProgID ChromeHTML -Quiet
 
     .NOTES
         This script was tested on Windows 10 Home 1909 and 2004.
@@ -146,7 +154,10 @@ Param (
 
     [Parameter(ParameterSetName="SpecificUsers", HelpMessage="Perform operations on specific users")]
     [ValidateNotNullOrEmpty()]
-    [String[]]$Users
+    [String[]]$Users,
+
+    [Parameter(HelpMessage="Don't output when association is successfully changed.")]
+    [Switch]$Quiet
 )
 
 Set-StrictMode -Version 3
@@ -514,6 +525,9 @@ function Remove-Registry-ACL-Deny-Rules($User) {
     if (!$CurrentUser -and !$AllUsers -and !$Users) {
         $CurrentUser = $true
     }
+    if (!$Quiet) {
+        $Quiet = $false
+    }
 
     $EnumeratedUsers = Enumerate-Users
     foreach ($User in $EnumeratedUsers) {
@@ -550,7 +564,9 @@ function Remove-Registry-ACL-Deny-Rules($User) {
             Write-Warning "Set-UserChoice failed for user `"$($User.Name)`""
         }
 
-        Write-Host "File association set for user `"$($User.Name)`": $Extension => $ProgID (hash `"$Hash`")"
+        if ($Quiet -eq $false){
+            Write-Host "File association set for user `"$($User.Name)`": $Extension => $ProgID (hash `"$Hash`")"
+        }
         $ReturnCode = 0 # return 0 if at least one assoc was set correctly
     }
 

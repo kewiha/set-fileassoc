@@ -33,6 +33,7 @@ For my personal use case (domainless network of Ansible-managed Windows 10 nodes
 4. Run the script:
     - `.\Set-FileAssoc.ps1 -Extension .pdf -ProgID SumatraPDF -CurrentUser`
     - (shorthand version) `.\Set-FileAssoc.ps1 .pdf SumatraPDF`
+5. For quiet operation, include `-Quiet`
 
 ## Is that... legal?
 This script is a product of reverse-engineering Windows binaries. Therefore, if your organization has to strictly adhere to Microsoft EULA, it may be problematic, legal-wise, to use this script, because:
