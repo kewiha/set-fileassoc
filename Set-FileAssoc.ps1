@@ -1,20 +1,20 @@
 ﻿<#
     .SYNOPSIS
 
-        Sets Windows file associations on a per-user basis, bypassing the built-in protection.
+        Sets Windows file/protocol associations on a per-user basis, bypassing the built-in protection.
 
     .DESCRIPTION
 
-        This script allows a user or an IT administrator to change user file associations in Windows 10.
+        This script allows a user or an IT administrator to change user file/protocol associations in Windows 10.
 
-        User file associations in newer versions of Windows are normally protected from an unauthorized change,
+        User file/protocol in newer versions of Windows are normally protected from an unauthorized change,
         and therefore can only be set interactively through Settings app, or using a XML file pushed through GPO.
 
         The XML method has several drawbacks:
             - IT administrator has to keep track of any new associations when a Windows Feature Update gets released;
             - if the computer is not in a domain, associations can only be set in a reference image, and as a result:
                 - apps also have to be pre-built in your image;
-                - once an user changes one of their file associations, it cannot be set back using the XML method.
+                - once an user changes one of their file/protocol, it cannot be set back using the XML method.
 
         A SetUserFTA tool has been made in 2017 to combat this limitation:
         https://kolbi.cz/blog/2017/10/25/setuserfta-userchoice-hash-defeated-set-file-type-associations-per-user/
@@ -29,15 +29,17 @@
         For my personal use case (domainless network of Ansible-managed Windows 10 nodes with a "bleeding-edge" update policy),
         a different approach was needed, therefore, this script was made.
 
-    .PARAMETER Extension
+    .PARAMETER ExtensionOrProtocol
 
-        Specifies a file extension that an association will be set for.
+        Specifies a file extension or protocol that an association will be set for.
 
-        Example: .pdf
+        Examples:
+            .pdf
+            http
 
     .PARAMETER ProgID
 
-        Specifies the ProgID - an application/extension identifier for a file extension.
+        Specifies the ProgID - an application/extension identifier for a file extension/protocol.
         ProgIDs can be found:
             - in HKCU:\Software\Classes for software that was installed in an user context;
             - in HKLM:\Software\Classes for system-wide software;
@@ -90,15 +92,15 @@
 
     .EXAMPLE
 
-        C:\> .\Set-FileAssoc.ps1 -Extension .pdf -ProgID SumatraPDF -AllUsers
+        C:\> .\Set-FileAssoc.ps1 -ExtensionOrProtocol .pdf -ProgID SumatraPDF -AllUsers
 
     .EXAMPLE
 
-        C:\> .\Set-FileAssoc.ps1 -Extension .html -ProgID ChromeHTML -Users user1, user2
+        C:\> .\Set-FileAssoc.ps1 -ExtensionOrProtocol .html -ProgID ChromeHTML -Users user1, user2
 
     .EXAMPLE
 
-        C:\> .\Set-FileAssoc.ps1 -Extension .html -ProgID ChromeHTML -Quiet
+        C:\> .\Set-FileAssoc.ps1 -ExtensionOrProtocol .html -ProgID ChromeHTML -Quiet
 
     .NOTES
         This script was tested on Windows 10 Home 1909 and 2004.
@@ -112,7 +114,7 @@
         Therefore, if your organization has to strictly adhere to Microsoft EULA,
         it may be problematic, legal-wise, to use this script, because:
             - it circumvents the measures set in place by Microsoft to prevent tampering with
-              file associations and user experience;
+              file/protocol and user experience;
             - it uses features that were implemented by reverse-engineering binaries that
               are "legally protected" from being reverse-engineered.
 
@@ -129,11 +131,11 @@
 [CmdletBinding(DefaultParameterSetName="CurrentUser", SupportsShouldProcess)]
 
 Param (
-    [Parameter(Mandatory, Position=0, HelpMessage="File extension", ParameterSetName="CurrentUser")]
-    [Parameter(Mandatory, Position=0, HelpMessage="File extension", ParameterSetName="AllUsers")]
-    [Parameter(Mandatory, Position=0, HelpMessage="File extension", ParameterSetName="SpecificUsers")]
-    [ValidatePattern("\..+")]
-    [String]$Extension,
+    [Parameter(Mandatory, Position=0, HelpMessage="File extension or protocol", ParameterSetName="CurrentUser")]
+    [Parameter(Mandatory, Position=0, HelpMessage="File extension or protocol", ParameterSetName="AllUsers")]
+    [Parameter(Mandatory, Position=0, HelpMessage="File extension or protocol", ParameterSetName="SpecificUsers")]
+    [ValidateNotNullOrEmpty()]
+    [String]$ExtensionOrProtocol,
 
     [Parameter(Mandatory, Position=1, HelpMessage="Program ID", ParameterSetName="CurrentUser")]
     [Parameter(Mandatory, Position=1, HelpMessage="Program ID", ParameterSetName="AllUsers")]
@@ -339,15 +341,21 @@ function Get-HKURootForUser($User) {
 
 function Get-HKUKeyForUser($User) {
     try {
-        $Key = "$($User.Root)\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\FileExts\$Extension\UserChoice"
+        if ($ExtensionOrProtocol -match '^\.'){
+            $Key = "$($User.Root)\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\FileExts\$ExtensionOrProtocol\UserChoice"
+        } else {
+           $Key = "$($User.Root)\SOFTWARE\Microsoft\Windows\Shell\Associations\UrlAssociations\$ExtensionOrProtocol\UserChoice"
+        }
         if (!(Test-Path $Key)) {
             $Key_Parent = $Key -replace '\\UserChoice$'
-            $Key_OpenWithList = "$Key_Parent\OpenWithList"
-            $Key_OpenWithProgids = "$Key_Parent\OpenWithProgids"
             New-Item -Path $Key_Parent | Out-Null
-            New-Item -Path $Key_OpenWithList | Out-Null
-            New-Item -Path $Key_OpenWithProgids | Out-Null
-            New-ItemProperty -Path $Key_OpenWithProgids -Name $ProgID -Type None -Value ([byte[]]::new(0)) | Out-Null
+            if ($ExtensionOrProtocol -match '^\.'){
+                $Key_OpenWithList = "$Key_Parent\OpenWithList"
+                $Key_OpenWithProgids = "$Key_Parent\OpenWithProgids"
+                New-Item -Path $Key_OpenWithList | Out-Null
+                New-Item -Path $Key_OpenWithProgids | Out-Null
+                New-ItemProperty -Path $Key_OpenWithProgids -Name $ProgID -Type None -Value ([byte[]]::new(0)) | Out-Null
+            }
             New-Item -Path $Key | Out-Null
             New-ItemProperty -Path $Key -Name Hash -Type String -Value "" | Out-Null
             New-ItemProperty -Path $Key -Name ProgId -Type String -Value "" | Out-Null
@@ -411,7 +419,7 @@ function Get-KeyWriteTimeForUser($User) {
 
 
 function Get-InputStringForUser($User) {
-    return ("{0}{1}{2}{3}{4}" -f $Extension, $User.SID, $ProgID, $User.WriteTime,
+    return ("{0}{1}{2}{3}{4}" -f $ExtensionOrProtocol, $User.SID, $ProgID, $User.WriteTime,
         "User Choice set via Windows User Experience {D18B6DD5-6124-4341-9318-804003BAFA0B}").ToLowerInvariant()
 }
 
@@ -536,7 +544,9 @@ function Remove-Registry-ACL-Deny-Rules($User) {
             continue
         }
 
-        Remove-Registry-ACL-Deny-Rules $User
+        if ($ExtensionOrProtocol -match '^\.'){
+            Remove-Registry-ACL-Deny-Rules $User
+        }
 
         $User = Set-UserExtraInfo $User
         if (!$User) {
@@ -565,7 +575,11 @@ function Remove-Registry-ACL-Deny-Rules($User) {
         }
 
         if ($Quiet -eq $false){
-            Write-Host "File association set for user `"$($User.Name)`": $Extension => $ProgID (hash `"$Hash`")"
+            if ($ExtensionOrProtocol -match '^\.'){
+                Write-Host "File association set for user `"$($User.Name)`": $ExtensionOrProtocol => $ProgID (hash `"$Hash`")"
+            } else {
+                Write-Host "Protocol association set for user `"$($User.Name)`": $ExtensionOrProtocol => $ProgID (hash `"$Hash`")"
+            }
         }
         $ReturnCode = 0 # return 0 if at least one assoc was set correctly
     }
